@@ -1091,10 +1091,11 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 					}
 					if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
 						max_node_level = get_max_node_level(nb, max_node_level);
-						flows[num_flows++] = nb;
 						if (nb.t == NEIGHBOR_LOWER)
 							flowing_down = true;
 					}
+					// Take note of all flows
+					flows[num_flows++] = nb;
 					break;
 				case LiquidType_END:
 					break;
@@ -1237,7 +1238,8 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			case LIQUID_FLOWING:
 				// make sure source flows into all neighboring nodes
 				for (u16 i = 0; i < num_flows; i++)
-					if (flows[i].t != NEIGHBOR_UPPER)
+					if (flows[i].t != NEIGHBOR_UPPER &&
+							m_nodedef->get(flows[i].n).liquid_alternative_flowing_id == liquid_kind)
 						m_transforming_liquid.push_back(flows[i].p);
 				for (u16 i = 0; i < num_airs; i++)
 					if (airs[i].t != NEIGHBOR_UPPER)
@@ -1246,7 +1248,8 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			case LIQUID_NONE:
 				// this flow has turned to air; neighboring flows might need to do the same
 				for (u16 i = 0; i < num_flows; i++)
-					m_transforming_liquid.push_back(flows[i].p);
+					if (m_nodedef->get(flows[i].n).liquid_alternative_flowing_id == liquid_kind)
+						m_transforming_liquid.push_back(flows[i].p);
 				break;
 			case LiquidType_END:
 				break;
