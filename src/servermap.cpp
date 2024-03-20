@@ -1000,8 +1000,6 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		int num_flows = 0;
 		NodeNeighbor airs[6]; // surrounding air
 		int num_airs = 0;
-		NodeNeighbor neutrals[6]; // nodes that are solid or another kind of liquid
-		int num_neutrals = 0;
 		bool flowing_down = false;
 		bool ignored_sources = false;
 		bool floating_node_above = false;
@@ -1035,7 +1033,6 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 						if (nb.t == NEIGHBOR_LOWER)
 							flowing_down = true;
 					} else {
-						neutrals[num_neutrals++] = nb;
 						if (nb.n.getContent() == CONTENT_IGNORE) {
 							// If node below is ignore prevent water from
 							// spreading outwards and otherwise prevent from
@@ -1051,9 +1048,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 					// if this node is not (yet) of a liquid type, choose the first liquid type we encounter
 					if (liquid_kind == CONTENT_AIR)
 						liquid_kind = cfnb.liquid_alternative_flowing_id;
-					if (cfnb.liquid_alternative_flowing_id != liquid_kind) {
-						neutrals[num_neutrals++] = nb;
-					} else {
+					if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
 						// Do not count bottom source, it will screw things up
 						if(nt != NEIGHBOR_LOWER)
 							sources[num_sources++] = nb;
@@ -1073,9 +1068,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 								max_level_from_neighbor >= (LIQUID_LEVEL_MAX + 1 - range))
 							liquid_kind = cfnb.liquid_alternative_flowing_id;
 					}
-					if (cfnb.liquid_alternative_flowing_id != liquid_kind) {
-						neutrals[num_neutrals++] = nb;
-					} else {
+					if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
 						flows[num_flows++] = nb;
 						if (nb.t == NEIGHBOR_LOWER)
 							flowing_down = true;
