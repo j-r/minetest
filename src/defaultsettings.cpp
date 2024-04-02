@@ -543,6 +543,7 @@ void set_default_settings()
 #endif
 
 	settings->setDefault("touchscreen_sensitivity", "0.2");
+	settings->setDefault("touchscreen_sensitivity_digging", "0.1");
 	settings->setDefault("touchscreen_threshold", "20");
 	settings->setDefault("touch_long_tap_delay", "400");
 	settings->setDefault("touch_use_crosshair", "false");

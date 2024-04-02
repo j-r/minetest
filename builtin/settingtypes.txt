@@ -159,6 +159,11 @@ touch_controls (Enable touchscreen controls) bool true
 #    Requires: touch_controls
 touchscreen_sensitivity (Touchscreen sensitivity) float 0.2 0.001 10.0
 
+#    Touchscreen sensitivity multiplier while digging.
+#
+#    Requires: touch_controls
+touchscreen_sensitivity_digging (Touchscreen sensitivity while digging) float 0.2 0.0 10.0
+
 #    The length in pixels after which a touch interaction is considered movement.
 #
 #    Requires: touch_controls

@@ -641,9 +641,14 @@ void TouchControls::translateEvent(const SEvent &event)
 			m_move_pos = touch_pos;
 			m_pointer_pos[event.TouchInput.ID] = touch_pos;
 
+			// compute effective touch sensitivity
+			double d = 6.0f / RenderingEngine::getDisplayDensity();
+			if (m_tap_state == TapState::None)
+				d *= g_settings->getFloat("touchscreen_sensitivity", 0.001f, 10.0f);
+			else
+				d *= g_settings->getFloat("touchscreen_sensitivity_digging", 0.0f, 10.0f);
+
 			// update camera_yaw and camera_pitch
-			const double d = g_settings->getFloat("touchscreen_sensitivity", 0.001f, 10.0f)
-					* 6.0f / RenderingEngine::getDisplayDensity();
 			m_camera_yaw_change -= dir_free.X * d;
 			m_camera_pitch_change += dir_free.Y * d;
 
