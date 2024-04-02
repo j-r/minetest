@@ -95,6 +95,8 @@ pkgmgr = {}
 -- @param virtual_path Prettified unique path (e.g. "mods", "mods/mt_modpack")
 -- @param listing      Input. Flat array to insert located mods and modpacks
 function pkgmgr.get_mods(path, virtual_path, listing)
+	core.log("action", "[pkgmgr] loading mods from " .. virtual_path .. " ->" .. path)
+	local start_time = core.get_us_time()
 	local mods = core.get_mod_list(path, virtual_path)
 	local parent = {}
 	for i, toadd in ipairs(mods) do
@@ -114,6 +116,9 @@ function pkgmgr.get_mods(path, virtual_path, listing)
 	end
 
 	pkgmgr.update_translations(mods)
+
+	local elapsed = core.get_us_time() - start_time
+	core.log("action", "[pkgmgr] loading mods took " .. elapsed .. "μs")
 end
 
 --------------------------------------------------------------------------------
