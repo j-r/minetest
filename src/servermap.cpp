@@ -868,6 +868,9 @@ const static v3s16 liquid_6dirs[6] = {
 	v3s16( 0,-1, 0)
 };
 
+// lower liquids cannot flow here
+const static u8 opposite_6dir[6] = { 5, 3, 4, 1, 2, 99 };
+
 enum NeighborType : u8 {
 	NEIGHBOR_UPPER,
 	NEIGHBOR_SAME_LEVEL,
@@ -1021,6 +1024,23 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			else
 				// non directional source or non liquid node
 				nb_dirdist = 0;
+                        // extract direction from dirdist
+                        // uses liquid_6dirs indices to encode direction, range 0-5
+                        // 0   -> 0: no direction (can't flow up)
+                        // 31  -> 5: flowing down
+                        // 1-4 -> 1-4: flowing directly into neighbor flowing down
+                        // 5-28-> 1-4: direction to closest flowdown, distance is floor((<dirdist>-1)/4)+1
+                        // 29-30 currently unused (TODO: encode flowing down into directional flow)
+                        // a bit ugly, but maximizes encodable distance
+			u8 nb_direction;
+			if (nb_dirdist == LIQUID_DIRECTION_DOWN)
+				nb_direction = 5;
+			else if (nb_dirdist)
+				nb_direction = (nb_dirdist - 1) % 4 + 1;
+			else
+				nb_direction = 0;
+                        // note that opposite_6dir[5]>5
+			bool nb_flows_here = !nb_direction || nb_direction == opposite_6dir[i];
 			if (nt == NEIGHBOR_UPPER && cfnb.floats)
 				floating_node_above = true;
 			switch (cfnb.liquid_type) {
@@ -1057,7 +1077,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 								can_flow_here = true;
 								break;
 							case NEIGHBOR_SAME_LEVEL:
-								can_flow_here = true;
+								can_flow_here = nb_flows_here;
 								break;
 							case NEIGHBOR_LOWER:
 								// cannot happen
@@ -1093,8 +1113,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 								break;
 							case NEIGHBOR_SAME_LEVEL:
 								// exclude falling liquids on the same level, they cannot flow here anyway
-								if (nb_dirdist != LIQUID_DIRECTION_DOWN &&
-										nb_node_level > 0)
+								if (nb_flows_here && nb_node_level > 0)
 									max_level_from_neighbor = nb_node_level - 1;
 								break;
 							case NEIGHBOR_LOWER:
