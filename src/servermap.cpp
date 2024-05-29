@@ -971,6 +971,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		content_t node_content = n0.getContent();
 		const ContentFeatures &cf = m_nodedef->get(node_content);
 		LiquidType liquid_type = cf.liquid_type;
+		s8 max_node_level = -1;
 		switch (liquid_type) {
 			case LIQUID_SOURCE:
 				// liquid source has no node level
@@ -1089,6 +1090,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 							liquid_kind = cfnb.liquid_alternative_flowing_id;
 					}
 					if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
+						max_node_level = get_max_node_level(nb, max_node_level);
 						flows[num_flows++] = nb;
 						if (nb.t == NEIGHBOR_LOWER)
 							flowing_down = true;
@@ -1104,7 +1106,6 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		 */
 		content_t new_node_content;
 		s8 new_node_level = -1;
-		s8 max_node_level = -1;
 
 		u8 range = m_nodedef->get(liquid_kind).liquid_range;
 		if (range > LIQUID_LEVEL_MAX + 1)
@@ -1128,11 +1129,6 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			new_node_level = node_level;
 			new_node_content = liquid_kind;
 		} else {
-			// no surrounding sources, so get the maximum level that can flow into this node
-			for (u16 i = 0; i < num_flows; i++) {
-				max_node_level = get_max_node_level(flows[i], max_node_level);
-			}
-
 			u8 viscosity = m_nodedef->get(liquid_kind).liquid_viscosity;
 			if (viscosity > 1 && max_node_level != node_level) {
 				// amount to gain, limited by viscosity
