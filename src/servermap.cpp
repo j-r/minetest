@@ -1045,13 +1045,32 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 					}
 					break;
 				case LIQUID_SOURCE:
-					// if this node is not (yet) of a liquid type, choose the first liquid type we encounter
-					if (liquid_kind == CONTENT_AIR)
-						liquid_kind = cfnb.liquid_alternative_flowing_id;
-					if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
-						// Do not count bottom source, it will screw things up
-						if(nt != NEIGHBOR_LOWER)
-							num_sources++;
+					// Lower sources can never flow here
+					if (nb.t != NEIGHBOR_LOWER) {
+						bool can_flow_here = false;
+						switch (nb.t) {
+							case NEIGHBOR_UPPER:
+								can_flow_here = true;
+								break;
+							case NEIGHBOR_SAME_LEVEL:
+								can_flow_here = true;
+								break;
+							case NEIGHBOR_LOWER:
+								// cannot happen
+								break;
+						}
+
+						if (can_flow_here) {
+							// if this node is not (yet) of a liquid type,
+							// choose the first liquid type we encounter
+							if (liquid_kind == CONTENT_AIR) {
+								liquid_kind = cfnb.liquid_alternative_flowing_id;
+							}
+							if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
+								// count number of sources that could flow here
+								num_sources++;
+							}
+						}
 					}
 					break;
 				case LIQUID_FLOWING:
