@@ -994,7 +994,6 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		/*
 			Collect information about the environment
 		 */
-		NodeNeighbor sources[6]; // surrounding sources
 		int num_sources = 0;
 		NodeNeighbor flows[6]; // surrounding flowing liquid nodes
 		int num_flows = 0;
@@ -1051,7 +1050,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 					if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
 						// Do not count bottom source, it will screw things up
 						if(nt != NEIGHBOR_LOWER)
-							sources[num_sources++] = nb;
+							num_sources++;
 					}
 					break;
 				case LIQUID_FLOWING:
@@ -1095,7 +1094,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			// or the flowing alternative of the first of the surrounding sources (if it's air), so
 			// it's perfectly safe to use liquid_kind here to determine the new node content.
 			new_node_content = m_nodedef->get(liquid_kind).liquid_alternative_source_id;
-		} else if (num_sources >= 1 && sources[0].t != NEIGHBOR_LOWER) {
+		} else if (num_sources >= 1) {
 			// liquid_kind is set properly, see above
 			max_node_level = new_node_level = LIQUID_LEVEL_MAX;
 			if (new_node_level >= (LIQUID_LEVEL_MAX + 1 - range))
