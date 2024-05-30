@@ -1027,7 +1027,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 					if (cfnb.floodable) {
 						airs[num_airs++] = nb;
 						// if the current node is a water source the neighbor
-						// should be enqueded for transformation regardless of whether the
+						// should be enqueuded for transformation regardless of whether the
 						// current node changes or not.
 						if (nb.t != NEIGHBOR_UPPER && liquid_type != LIQUID_NONE)
 							m_transforming_liquid.push_back(npos);
