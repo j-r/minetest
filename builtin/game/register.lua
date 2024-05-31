@@ -167,7 +167,8 @@ function core.register_item(name, itemdef)
 	end
 
 	-- Flowing liquid uses param2
-	if itemdef.type == "node" and itemdef.liquidtype == "flowing" then
+	if itemdef.type == "node" and itemdef.liquidtype == "flowing" and
+	    itemdef.paramtype2 ~= "directionalflowing" then
 		itemdef.paramtype2 = "flowingliquid"
 	end
 

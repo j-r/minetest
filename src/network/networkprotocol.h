@@ -223,6 +223,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 		AO_CMD_SET_BONE_POSITION extended
 		Add TOCLIENT_MOVE_PLAYER_REL
 		Move default minimap from client-side C++ to server-side builtin Lua
+		New directional liquid param2 types get downgraded for older clients
 		[scheduled bump for 5.9.0]
 */
 
