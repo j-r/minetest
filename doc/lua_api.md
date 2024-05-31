@@ -1369,12 +1369,42 @@ The function of `param2` is determined by `paramtype2` in node definition.
 `param2` is reserved for the engine when `paramtype2 != "none"`.
 
 * `paramtype2 = "flowingliquid"`
-    * Used by `drawtype = "flowingliquid"` and `liquidtype = "flowing"`
+    * Automatically Used by `drawtype = "flowingliquid"` and `liquidtype = "flowing"`
+      if none set
     * The liquid level and a flag of the liquid are stored in `param2`
     * Bits 0-2: Liquid level (0-7). The higher, the more liquid is in this node;
       see `core.get_node_level`, `core.set_node_level` and `core.add_node_level`
       to access/manipulate the content of this field
     * Bit 3: If set, liquid is flowing downwards (no graphical effect)
+* `paramtype2 = "directionalflowing"`
+    * Alternative implementation of a flowing liquid with the option to not
+      spread out, but flow in a single direction towards a lower level
+    * The liquid level and direction of the liquid are stored in `param2`
+    * Bits 0-2: Liquid level (0-7). The higher, the more liquid is in this node;
+      see `minetest.get_node_level`, `minetest.set_node_level` and `minetest.add_node_level`
+      to access/manipulate the content of this field
+    * Bit 3-7: direction and distance to closest flowdown; 0: no direction,
+      31: flowing down,
+      1-4: flowing only in +Z/+X/-Z/-X direction, directly into a flowdown
+      5-28: flowing in the direction given by (d-1)%4+1 with the closest
+            flowdown floor((d-1)/4)+1 steps away, supporting distances 0-6
+      29-30 unused
+    * directional liquid has the following differences from normal liquids
+        * optionally flowing in a single direction if there is a path within
+          liquid_directed_range to a lower level
+        * when two or more different liquids meet in a node the strongest flow
+          will displace the other liquids
+        * a liquid source node that flows down will not create horizontal flows
+        * flowing liquid above a source node of the same kind will not spread
+          horizontally
+        * rendering is slightly different; older clients will render linear
+          flows without volume, but otherwise work fine
+* `paramtype2 = "directionalsource"`
+    * Alternative implementation of a liquid source with the option to not
+      spread out, but flow in a single direction towards a lower level
+    * Bit 3-7: direction to closest flowdown; 0: no direction, 31: flowing down,
+      1-4: flowing only in +Z/+X/-Z/-X direction, directly into a flowdown
+      5-30 unused, distance to flowdown is not encoded
 * `paramtype2 = "wallmounted"`
     * Supported drawtypes: "torchlike", "signlike", "plantlike",
       "plantlike_rooted", "normal", "nodebox", "mesh"
@@ -10283,6 +10313,12 @@ Used by `core.register_node`.
     -- Maximum distance that flowing liquid nodes can spread around
     -- source on flat land;
     -- maximum = 8; set to 0 to disable liquid flow
+
+    liquid_directed_range = 8,
+    -- Only for "directionalflowing" paramtype2
+    -- Maximum length of a directional path on flat land
+    -- maximum = 7; set to 0 to disable directional liquid flow
+       (currently does not affect paramtype2 "directionalsource")
 
     drowning = 0,
     -- Player will take this amount of damage if no bubbles are left

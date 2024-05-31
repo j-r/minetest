@@ -99,6 +99,10 @@ enum Rotation {
 #define LIQUID_LEVEL_MASK 0x07
 #define LIQUID_FLOW_DOWN_MASK 0x08
 
+#define LIQUID_DIRECTION_MASK 0xF8
+#define LIQUID_DIRECTION_NONE 0
+#define LIQUID_DIRECTION_DOWN 31
+
 //#define LIQUID_LEVEL_MASK 0x3f // better finite water
 //#define LIQUID_FLOW_DOWN_MASK 0x40 // not used when finite water
 

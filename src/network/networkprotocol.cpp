@@ -69,6 +69,7 @@
 		Support of showing a player inventory using 'core.show_formspec'
 		[scheduled bump for 5.13.0]
 	PROTOCOL VERSION 50
+		New directional liquid param2 types get downgraded for older clients
 		Support for TOCLIENT_SPAWN_PARTICLE_BATCH
 		[scheduled bump for 5.14.0]
 */

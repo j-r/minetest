@@ -70,6 +70,13 @@ enum ContentParamType2 : u8
 	CPT2_4DIR,
 	// 6 bits of palette index, then 4dir
 	CPT2_COLORED_4DIR,
+	// Flowing liquid properties with level in the lower 3 bits and optional
+        // direction in the upper 5 bits; 0: no direction, 31: flowing down,
+        // 1-28: direction and distance to downflow, (x-1) % 4 = direction,
+        // (x-1) / 4 = distance
+	CPT2_DIRECTIONAL_FLOWING,
+	// Liquid source properties with optional direction in the upper 5 bits
+	CPT2_DIRECTIONAL_SOURCE,
 	// Dummy for validity check
 	ContentParamType2_END
 };
@@ -421,6 +428,8 @@ struct ContentFeatures
 	bool liquid_renewable;
 	// Number of flowing liquids surrounding source
 	u8 liquid_range;
+	// maximum length of a directed flow, range 0-7
+	u8 liquid_directed_range;
 	u8 drowning;
 	// Liquids flow into and replace node
 	bool floodable;

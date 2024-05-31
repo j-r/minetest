@@ -386,6 +386,7 @@ void ContentFeatures::reset()
 	liquid_viscosity = 0;
 	liquid_renewable = true;
 	liquid_range = LIQUID_LEVEL_MAX+1;
+	liquid_directed_range = 7;
 	drowning = 0;
 	light_source = 0;
 	damage_per_second = 0;
@@ -450,7 +451,16 @@ void ContentFeatures::serialize(std::ostream &os, u16 protocol_version) const
 		}
 	}
 	writeU8(os, param_type);
-	writeU8(os, param_type_2);
+	ContentParamType2 pt2 = param_type_2;
+	if (protocol_version < 50) {
+		// old clients don't know about directional liquids, but
+		// handle them just fine with only minor visual issues
+		if (pt2 == CPT2_DIRECTIONAL_FLOWING)
+			pt2 = CPT2_FLOWINGLIQUID;
+		else if (pt2 == CPT2_DIRECTIONAL_SOURCE)
+			pt2 = CPT2_NONE;
+	}
+	writeU8(os, pt2);
 
 	// visual
 	writeU8(os, drawtype);

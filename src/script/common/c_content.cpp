@@ -919,6 +919,8 @@ void read_content_features(lua_State *L, ContentFeatures &f, int index)
 	f.move_resistance = f.liquid_viscosity;
 	f.liquid_range = getintfield_default(L, index,
 			"liquid_range", f.liquid_range);
+	f.liquid_directed_range = getintfield_default(L, index,
+			"liquid_directed_range", f.liquid_directed_range);
 	f.leveled = getintfield_default(L, index, "leveled", f.leveled);
 	f.leveled_max = getintfield_default(L, index,
 			"leveled_max", f.leveled_max);
@@ -1140,6 +1142,8 @@ void push_content_features(lua_State *L, const ContentFeatures &c)
 		lua_setfield(L, -2, "liquid_renewable");
 		lua_pushnumber(L, c.liquid_range);
 		lua_setfield(L, -2, "liquid_range");
+		lua_pushnumber(L, c.liquid_directed_range);
+		lua_setfield(L, -2, "liquid_directed_range");
 	}
 	lua_pushnumber(L, c.drowning);
 	lua_setfield(L, -2, "drowning");
