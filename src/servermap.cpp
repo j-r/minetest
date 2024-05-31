@@ -968,7 +968,8 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		// The node which will be placed there if liquid
 		// can't flow into this node.
 		content_t floodable_node = CONTENT_AIR;
-		const ContentFeatures &cf = m_nodedef->get(n0);
+		content_t node_content = n0.getContent();
+		const ContentFeatures &cf = m_nodedef->get(node_content);
 		LiquidType liquid_type = cf.liquid_type;
 		switch (liquid_type) {
 			case LIQUID_SOURCE:
@@ -977,14 +978,14 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 				break;
 			case LIQUID_FLOWING:
 				node_level = (n0.param2 & LIQUID_LEVEL_MASK);
-				liquid_kind = n0.getContent();
+				liquid_kind = node_content;
 				break;
 			case LIQUID_NONE:
 				// if this node is 'floodable', it *could* be transformed
 				// into a liquid, otherwise, continue with the next node.
 				if (!cf.floodable)
 					continue;
-				floodable_node = n0.getContent();
+				floodable_node = node_content;
 				liquid_kind = CONTENT_AIR;
 				break;
 			case LiquidType_END:
@@ -1156,13 +1157,14 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 
 		}
 
+		const ContentFeatures &cfnew = m_nodedef->get(new_node_content);
 
 		/*
 			check if anything has changed. if not, just continue with the next node.
 		 */
-		if (new_node_content == n0.getContent() &&
-				(m_nodedef->get(n0.getContent()).liquid_type != LIQUID_FLOWING ||
-				((n0.param2 & LIQUID_LEVEL_MASK) == (u8)new_node_level &&
+		if (new_node_content == node_content &&
+				(liquid_type != LIQUID_FLOWING ||
+				(new_node_level == node_level &&
 				((n0.param2 & LIQUID_FLOW_DOWN_MASK) == LIQUID_FLOW_DOWN_MASK)
 				== flowing_down)))
 			continue;
@@ -1180,7 +1182,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			update the current node
 		 */
 		MapNode n00 = n0;
-		if (m_nodedef->get(new_node_content).liquid_type == LIQUID_FLOWING) {
+		if (cfnew.liquid_type == LIQUID_FLOWING) {
 			// set level to last 3 bits, flowing down bit to 4th bit
 			n0.param2 = (flowing_down ? LIQUID_FLOW_DOWN_MASK : 0x00) | (new_node_level & LIQUID_LEVEL_MASK);
 		} else {
@@ -1234,7 +1236,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		/*
 			enqueue neighbors for update if necessary
 		 */
-		switch (m_nodedef->get(n0.getContent()).liquid_type) {
+		switch (cfnew.liquid_type) {
 			case LIQUID_SOURCE:
 			case LIQUID_FLOWING:
 				// make sure source flows into all neighboring nodes
