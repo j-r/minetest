@@ -1297,8 +1297,9 @@ void ServerMap::transformLiquidsLocal(std::map<v3s16, MapBlock*> &modified_block
 		}
 
 		/*
-			enqueue neighbors for update if necessary
+			enqueue nodes for update if necessary
 		 */
+		bool other_kind = false;
 		switch (cfnew.liquid_type) {
 			case LIQUID_SOURCE:
 			case LIQUID_FLOWING:
@@ -1316,6 +1317,13 @@ void ServerMap::transformLiquidsLocal(std::map<v3s16, MapBlock*> &modified_block
 				for (u16 i = 0; i < num_flows; i++)
 					if (m_nodedef->get(flows[i].n).liquid_alternative_flowing_id == liquid_kind)
 						liquid_queue.push_back(flows[i].p);
+					else
+						other_kind = true;
+				// don't do this update for classic flows for backwards compatibility
+				// TODO: decide whether this should be fixed for classic liquids, too
+				if (directional && other_kind)
+					// other liquid kind may now flow into this node
+					liquid_queue.push_back(p0);
 				break;
 			case LiquidType_END:
 				break;
