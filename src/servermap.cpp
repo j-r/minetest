@@ -1078,8 +1078,8 @@ void ServerMap::transformLiquidsLocal(std::map<v3s16, MapBlock*> &modified_block
 					}
 					break;
 				case LIQUID_FLOWING:
-					if (nb.t != NEIGHBOR_SAME_LEVEL ||
-						(nb.n.param2 & LIQUID_FLOW_DOWN_MASK) != LIQUID_FLOW_DOWN_MASK) {
+					// Lower flows cannot flow here
+					if (nb.t != NEIGHBOR_LOWER) {
 						// if this node is not (yet) of a liquid type, choose the first liquid type we encounter
 						// but exclude falling liquids on the same level, they cannot flow here anyway
 
@@ -1093,10 +1093,9 @@ void ServerMap::transformLiquidsLocal(std::map<v3s16, MapBlock*> &modified_block
 						if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
 								max_level_from_neighbor > max_node_level)
 							max_node_level = max_level_from_neighbor;
-					}
-					if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
-						if (nb.t == NEIGHBOR_LOWER)
-							flowing_down = true;
+					} else if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
+						// mark flowing down
+						flowing_down = true;
 					}
 					// Take note of all flows
 					flows[num_flows++] = nb;
