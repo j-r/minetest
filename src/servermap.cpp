@@ -890,31 +890,6 @@ struct NodeNeighbor {
 	{ }
 };
 
-static s8 get_max_node_level(NodeNeighbor nb, s8 current_max_node_level)
-{
-	s8 max_node_level = current_max_node_level;
-	u8 nb_node_level = (nb.n.param2 & LIQUID_LEVEL_MASK);
-	switch (nb.t) {
-		case NEIGHBOR_UPPER:
-			if (nb_node_level + WATER_DROP_BOOST > current_max_node_level) {
-				max_node_level = LIQUID_LEVEL_MAX;
-				if (nb_node_level + WATER_DROP_BOOST < LIQUID_LEVEL_MAX)
-					max_node_level = nb_node_level + WATER_DROP_BOOST;
-			} else if (nb_node_level > current_max_node_level) {
-				max_node_level = nb_node_level;
-			}
-			break;
-		case NEIGHBOR_LOWER:
-			break;
-		case NEIGHBOR_SAME_LEVEL:
-			if ((nb.n.param2 & LIQUID_FLOW_DOWN_MASK) != LIQUID_FLOW_DOWN_MASK &&
-					nb_node_level > 0 && nb_node_level - 1 > max_node_level)
-				max_node_level = nb_node_level - 1;
-			break;
-	}
-	return max_node_level;
-}
-
 void ServerMap::transforming_liquid_add(v3s16 p)
 {
 	m_transforming_liquid.push_back(p);
@@ -1078,13 +1053,28 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 				case LIQUID_FLOWING:
 					// Lower flows cannot flow here
 					if (nb.t != NEIGHBOR_LOWER) {
-						// if this node is not (yet) of a liquid type, choose the first liquid type we encounter
-						// but exclude falling liquids on the same level, they cannot flow here anyway
-
-						// used to determine if the neighbor can even flow into this node
-						s8 max_level_from_neighbor = get_max_node_level(nb, -1);
+						s8 max_level_from_neighbor = -1;
+						u8 nb_node_level = (nb.n.param2 & LIQUID_LEVEL_MASK);
+						switch (nb.t) {
+							case NEIGHBOR_UPPER:
+								max_level_from_neighbor = LIQUID_LEVEL_MAX;
+								if (nb_node_level + WATER_DROP_BOOST < LIQUID_LEVEL_MAX)
+									max_level_from_neighbor = nb_node_level + WATER_DROP_BOOST;
+								break;
+							case NEIGHBOR_SAME_LEVEL:
+								// exclude falling liquids on the same level, they cannot flow here anyway
+								if ((nb.n.param2 & LIQUID_FLOW_DOWN_MASK) != LIQUID_FLOW_DOWN_MASK &&
+										nb_node_level > 0)
+									max_level_from_neighbor = nb_node_level - 1;
+								break;
+							case NEIGHBOR_LOWER:
+								// never happens
+								break;
+						}
 						u8 range = m_nodedef->get(cfnb.liquid_alternative_flowing_id).liquid_range;
 
+						// if this node is not (yet) of a liquid type, choose the first
+						// liquid type we encounter that can flow into this node
 						if (liquid_kind == CONTENT_AIR &&
 								max_level_from_neighbor >= (LIQUID_LEVEL_MAX + 1 - range))
 							liquid_kind = cfnb.liquid_alternative_flowing_id;
