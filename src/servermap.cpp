@@ -929,7 +929,11 @@ void ServerMap::transforming_liquid_add(v3s16 p)
 void ServerMap::transformLiquidsLocal(std::map<v3s16, MapBlock*> &modified_blocks, UniqueQueue<v3s16> &liquid_queue,
 		ServerEnvironment *env, u32 liquid_loop_max)
 {
+	ScopeProfiler sp_avg(g_profiler, "ServerMap: transformLiquids avg", SPT_AVG);
+	ScopeProfiler sp_max(g_profiler, "ServerMap: transformLiquids max", SPT_MAX);
+
 	u32 loopcount = 0;
+	u32 looptransform = 0;
 
 	/*if(initial_size != 0)
 		infostream<<"transformLiquids(): initial_size="<<initial_size<<std::endl;*/
@@ -1142,6 +1146,7 @@ void ServerMap::transformLiquidsLocal(std::map<v3s16, MapBlock*> &modified_block
 
 		}
 
+
 		/*
 			check if anything has changed. if not, just continue with the next node.
 		 */
@@ -1151,6 +1156,9 @@ void ServerMap::transformLiquidsLocal(std::map<v3s16, MapBlock*> &modified_block
 				((n0.param2 & LIQUID_FLOW_DOWN_MASK) == LIQUID_FLOW_DOWN_MASK)
 				== flowing_down)))
 			continue;
+
+                // count changed node
+		looptransform += 1;
 
 		/*
 			check if there is a floating node above that needs to be updated.
@@ -1237,7 +1245,9 @@ void ServerMap::transformLiquidsLocal(std::map<v3s16, MapBlock*> &modified_block
 				break;
 		}
 	}
-	//infostream<<"Map::transformLiquids(): loopcount="<<loopcount<<std::endl;
+
+	g_profiler->add("ServerMap: transformLiquids: processed", loopcount);
+	g_profiler->add("ServerMap: transformLiquids: changed", looptransform);
 
 	for (const auto &iter : must_reflow)
 		liquid_queue.push_back(iter);
