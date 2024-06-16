@@ -990,6 +990,8 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			Collect information about the environment
 		 */
 		int num_sources = 0;
+		NodeNeighbor directional_sources[6]; // surrounding directional sources
+		int num_directional_sources = 0;
 		NodeNeighbor flows[6]; // surrounding flowing liquid nodes
 		int num_flows = 0;
 		NodeNeighbor airs[6]; // surrounding air
@@ -998,6 +1000,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		bool ignore_node_found = false;
 		bool floating_node_above = false;
 		u8 new_dirdist = 0;
+		u8 min_dirdist = 28;
 		for (u16 i = 0; i < 6; i++) {
 			NeighborType nt = NEIGHBOR_SAME_LEVEL;
 			switch (i) {
@@ -1096,6 +1099,9 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 								// count number of sources that could flow here
 								// note that liquid type will never change after a source has been found
 								num_sources++;
+								// if source is directional it needs to update itself if this node changes
+								if (nb_directional)
+									directional_sources[num_directional_sources++] = nb;
 							}
 						}
 					} else if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
@@ -1137,6 +1143,22 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 						if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
 								max_level_from_neighbor > max_node_level)
 							max_node_level = max_level_from_neighbor;
+						// if directional, pick direction to same level neighbor
+						// of same kind closest to flowdown
+						// note that this may be overridden by flowing_down later
+						if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
+								nb_directional &&
+								!nb_flows_here && nb_dirdist) {
+							if (nb_dirdist == LIQUID_DIRECTION_DOWN) {
+								if (!new_dirdist || new_dirdist > 4) {
+									new_dirdist = i;
+									min_dirdist = 0;
+								}
+							} else if (nb_dirdist <= min_dirdist) {
+								new_dirdist = nb_dirdist - nb_direction + i + 4;
+								min_dirdist = nb_dirdist - nb_direction;
+							}
+						}
 					} else if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
 						// mark flowing down
 						flowing_down = true;
@@ -1339,6 +1361,9 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 				for (u16 i = 0; i < num_airs; i++)
 					if (airs[i].t != NEIGHBOR_UPPER)
 						m_transforming_liquid.push_back(airs[i].p);
+				// make sure all neighboring directional sources update their state
+				for (u16 i = 0; i < num_directional_sources; i++)
+					m_transforming_liquid.push_back(directional_sources[i].p);
 				break;
 			case LIQUID_NONE:
 				// this flow has turned to air; neighboring flows might need to do the same
