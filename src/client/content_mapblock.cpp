@@ -616,11 +616,12 @@ void MapblockMeshGenerator::getLiquidNeighborhood()
 			else
 				liquid_level -= (LIQUID_LEVEL_MAX + 1 - range);
 			neighbor.level = (-0.5f + (liquid_level + 0.5f) / range);
-		}
+		} else if (cur_node.f->param_type_2 == CPT2_DIRECTIONAL_FLOWING)
+			continue;
 
 		// Check node above neighbor.
 		// NOTE: This doesn't get executed if neighbor
-		//       doesn't exist
+		//       isn't a liquid
 		p2.Y++;
 		n2 = data->m_vmanip.getNodeNoEx(blockpos_nodes + p2);
 		if (n2.getContent() == cur_liquid.c_source || n2.getContent() == cur_liquid.c_flowing)
