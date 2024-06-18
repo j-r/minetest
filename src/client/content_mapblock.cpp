@@ -600,6 +600,7 @@ void MapblockMeshGenerator::getLiquidNeighborhood()
 		neighbor.content = n2.getContent();
 		neighbor.level = -0.5f;
 		neighbor.is_same_liquid = false;
+		neighbor.is_flowing_down = false;
 		neighbor.top_is_same_liquid = false;
 
 		if (neighbor.content == CONTENT_IGNORE)
@@ -610,6 +611,12 @@ void MapblockMeshGenerator::getLiquidNeighborhood()
 			neighbor.level = 0.5f;
 		} else if (neighbor.content == cur_liquid.c_flowing) {
 			neighbor.is_same_liquid = true;
+                        if (cur_node.f->param_type_2 == CPT2_DIRECTIONAL_FLOWING)
+                          neighbor.is_flowing_down =
+                            ((n2.param2 & LIQUID_DIRECTION_MASK) == LIQUID_DIRECTION_MASK);
+                        else
+                          neighbor.is_flowing_down =
+                            ((n2.param2 & LIQUID_FLOW_DOWN_MASK) == LIQUID_FLOW_DOWN_MASK);
 			u8 liquid_level = (n2.param2 & LIQUID_LEVEL_MASK);
 			if (liquid_level <= LIQUID_LEVEL_MAX + 1 - range)
 				liquid_level = 0;
@@ -646,8 +653,10 @@ f32 MapblockMeshGenerator::getCornerLevel(int i, int k) const
 		const LiquidData::NeighborData &neighbor_data = cur_liquid.neighbors[k + dk][i + di];
 		content_t content = neighbor_data.content;
 
-		// If top is liquid, draw starting from top of node
-		if (neighbor_data.top_is_same_liquid)
+		// If top is liquid, draw starting from top of node unless
+                // liquid is directional and neighbor is flowing down
+		if ((cur_node.f->param_type_2 == CPT2_FLOWINGLIQUID || !neighbor_data.is_flowing_down) &&
+				neighbor_data.top_is_same_liquid)
 			return 0.5f;
 
 		// Source always has the full height
@@ -656,6 +665,10 @@ f32 MapblockMeshGenerator::getCornerLevel(int i, int k) const
 
 		// Flowing liquid has level information
 		if (content == cur_liquid.c_flowing) {
+			if (cur_node.f->param_type_2 == CPT2_DIRECTIONAL_FLOWING &&
+					neighbor_data.is_flowing_down && neighbor_data.top_is_same_liquid)
+				// directional liquid flowing into a waterfall
+				return -0.4f;
 			sum += neighbor_data.level;
 			count++;
 		} else if (content == CONTENT_AIR) {
