@@ -662,7 +662,11 @@ f32 MapblockMeshGenerator::getCornerLevel(int i, int k) const
 			air_count++;
 		}
 	}
-	if (air_count >= 2)
+	if (air_count >= (cur_node.f->param_type_2 == CPT2_DIRECTIONAL_FLOWING ? 3 : 2))
+		// visualize flow turning into air; require 2 air nodes for
+		// backwards compatibility, 3 for directional flows (which would
+		// work fine for classic liquids too)
+		// TODO: decide whether to use 3 air nodes for all liquids
 		return -0.5f + 0.2f / BS;
 	if (count > 0)
 		return sum / count;
