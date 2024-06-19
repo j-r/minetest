@@ -1000,7 +1000,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		NodeNeighbor airs[6]; // surrounding air
 		int num_airs = 0;
 		bool flowing_down = false;
-		bool ignored_sources = false;
+		bool ignore_node_found = false;
 		bool floating_node_above = false;
 		for (u16 i = 0; i < 6; i++) {
 			NeighborType nt = NEIGHBOR_SAME_LEVEL;
@@ -1034,12 +1034,13 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 					} else {
 						if (nb.n.getContent() == CONTENT_IGNORE) {
 							// If node below is ignore prevent water from
-							// spreading outwards and otherwise prevent from
-							// flowing away as ignore node might be the source
+							// spreading outwards, otherwise prevent from
+							// flowing away as the ignore node might be
+							// flowing here
 							if (nb.t == NEIGHBOR_LOWER)
 								flowing_down = true;
 							else
-								ignored_sources = true;
+								ignore_node_found = true;
 						}
 					}
 					break;
@@ -1101,9 +1102,9 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 				new_node_content = liquid_kind;
 			else
 				new_node_content = floodable_node;
-		} else if (ignored_sources && liquid_level >= 0) {
-			// Maybe there are neighboring sources that aren't loaded yet
-			// so prevent flowing away.
+		} else if (ignore_node_found && liquid_level >= 0) {
+			// Maybe there are neighboring flows that aren't loaded yet,
+			// so prevent flowing away
 			new_node_level = liquid_level;
 			new_node_content = liquid_kind;
 		} else {
