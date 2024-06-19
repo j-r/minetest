@@ -890,26 +890,26 @@ struct NodeNeighbor {
 	{ }
 };
 
-static s8 get_max_liquid_level(NodeNeighbor nb, s8 current_max_node_level)
+static s8 get_max_node_level(NodeNeighbor nb, s8 current_max_node_level)
 {
 	s8 max_node_level = current_max_node_level;
-	u8 nb_liquid_level = (nb.n.param2 & LIQUID_LEVEL_MASK);
+	u8 nb_node_level = (nb.n.param2 & LIQUID_LEVEL_MASK);
 	switch (nb.t) {
 		case NEIGHBOR_UPPER:
-			if (nb_liquid_level + WATER_DROP_BOOST > current_max_node_level) {
+			if (nb_node_level + WATER_DROP_BOOST > current_max_node_level) {
 				max_node_level = LIQUID_LEVEL_MAX;
-				if (nb_liquid_level + WATER_DROP_BOOST < LIQUID_LEVEL_MAX)
-					max_node_level = nb_liquid_level + WATER_DROP_BOOST;
-			} else if (nb_liquid_level > current_max_node_level) {
-				max_node_level = nb_liquid_level;
+				if (nb_node_level + WATER_DROP_BOOST < LIQUID_LEVEL_MAX)
+					max_node_level = nb_node_level + WATER_DROP_BOOST;
+			} else if (nb_node_level > current_max_node_level) {
+				max_node_level = nb_node_level;
 			}
 			break;
 		case NEIGHBOR_LOWER:
 			break;
 		case NEIGHBOR_SAME_LEVEL:
 			if ((nb.n.param2 & LIQUID_FLOW_DOWN_MASK) != LIQUID_FLOW_DOWN_MASK &&
-					nb_liquid_level > 0 && nb_liquid_level - 1 > max_node_level)
-				max_node_level = nb_liquid_level - 1;
+					nb_node_level > 0 && nb_node_level - 1 > max_node_level)
+				max_node_level = nb_node_level - 1;
 			break;
 	}
 	return max_node_level;
@@ -961,7 +961,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		/*
 			Collect information about current node
 		 */
-		s8 liquid_level = -1;
+		s8 node_level = -1;
 		// The liquid node which will be placed there if
 		// the liquid flows into this node.
 		content_t liquid_kind = CONTENT_IGNORE;
@@ -972,11 +972,11 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		LiquidType liquid_type = cf.liquid_type;
 		switch (liquid_type) {
 			case LIQUID_SOURCE:
-				liquid_level = LIQUID_LEVEL_SOURCE;
+				// liquid source has no node level
 				liquid_kind = cf.liquid_alternative_flowing_id;
 				break;
 			case LIQUID_FLOWING:
-				liquid_level = (n0.param2 & LIQUID_LEVEL_MASK);
+				node_level = (n0.param2 & LIQUID_LEVEL_MASK);
 				liquid_kind = n0.getContent();
 				break;
 			case LIQUID_NONE:
@@ -1061,7 +1061,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 						// but exclude falling liquids on the same level, they cannot flow here anyway
 
 						// used to determine if the neighbor can even flow into this node
-						s8 max_level_from_neighbor = get_max_liquid_level(nb, -1);
+						s8 max_level_from_neighbor = get_max_node_level(nb, -1);
 						u8 range = m_nodedef->get(cfnb.liquid_alternative_flowing_id).liquid_range;
 
 						if (liquid_kind == CONTENT_AIR &&
@@ -1102,28 +1102,28 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 				new_node_content = liquid_kind;
 			else
 				new_node_content = floodable_node;
-		} else if (ignore_node_found && liquid_level >= 0) {
+		} else if (ignore_node_found && node_level >= 0) {
 			// Maybe there are neighboring flows that aren't loaded yet,
 			// so prevent flowing away
-			new_node_level = liquid_level;
+			new_node_level = node_level;
 			new_node_content = liquid_kind;
 		} else {
 			// no surrounding sources, so get the maximum level that can flow into this node
 			for (u16 i = 0; i < num_flows; i++) {
-				max_node_level = get_max_liquid_level(flows[i], max_node_level);
+				max_node_level = get_max_node_level(flows[i], max_node_level);
 			}
 
 			u8 viscosity = m_nodedef->get(liquid_kind).liquid_viscosity;
-			if (viscosity > 1 && max_node_level != liquid_level) {
+			if (viscosity > 1 && max_node_level != node_level) {
 				// amount to gain, limited by viscosity
 				// must be at least 1 in absolute value
-				s8 level_inc = max_node_level - liquid_level;
+				s8 level_inc = max_node_level - node_level;
 				if (level_inc < -viscosity || level_inc > viscosity)
-					new_node_level = liquid_level + level_inc/viscosity;
+					new_node_level = node_level + level_inc/viscosity;
 				else if (level_inc < 0)
-					new_node_level = liquid_level - 1;
+					new_node_level = node_level - 1;
 				else if (level_inc > 0)
-					new_node_level = liquid_level + 1;
+					new_node_level = node_level + 1;
 				if (new_node_level != max_node_level)
 					must_reflow.push_back(p0);
 			} else {
