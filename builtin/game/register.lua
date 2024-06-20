@@ -3,6 +3,10 @@
 local builtin_shared = ...
 local S = core.get_translator("__builtin")
 
+local force_directional_liquids = core.settings:get_bool("force_directional_liquids", false)
+local force_liquid_range = tonumber(core.settings:get("force_liquid_range")) or -1
+local force_liquid_directed_range = tonumber(core.settings:get("force_liquid_directed_range")) or -1
+
 --
 -- Make raw registration functions inaccessible to anyone except this file
 --
@@ -166,10 +170,20 @@ function core.register_item(name, itemdef)
 		error("Unable to register item: Type is invalid: " .. dump(itemdef))
 	end
 
-	-- Flowing liquid uses param2
+	-- Force paramtype2 for liquids
 	if itemdef.type == "node" and itemdef.liquidtype == "flowing" and
 	    itemdef.paramtype2 ~= "directionalflowing" then
-		itemdef.paramtype2 = "flowingliquid"
+		itemdef.paramtype2 = force_directional_liquids and "directionalflowing" or "flowingliquid"
+	end
+	if itemdef.type == "node" and itemdef.liquidtype == "source" and
+	    itemdef.paramtype2 ~= "directionalsource" then
+		itemdef.paramtype2 = force_directional_liquids and "directionalsource" or nil
+	end
+	if itemdef.type == "node" and itemdef.liquidtype and force_liquid_range ~= -1 then
+		itemdef.liquid_range = force_liquid_range
+	end
+	if itemdef.type == "node" and itemdef.liquidtype and force_liquid_directed_range ~= -1 then
+		itemdef.liquid_directed_range = force_liquid_directed_range
 	end
 
 	-- BEGIN Legacy stuff
