@@ -2,6 +2,10 @@ local builtin_shared = ...
 local S = core.get_translator("__builtin")
 local debug_getinfo = debug.getinfo
 
+local force_directional_liquids = core.settings:get_bool("force_directional_liquids", false)
+local force_liquid_range = tonumber(core.settings:get("force_liquid_range")) or -1
+local force_liquid_directed_range = tonumber(core.settings:get("force_liquid_directed_range")) or -1
+
 --
 -- Make raw registration functions inaccessible to anyone except this file
 --
@@ -147,9 +151,18 @@ local function preprocess_node(nodedef)
 			" limiting it: " .. nodedef.name)
 	end
 
-	-- Flowing liquid uses param2
+	-- Override some properties for liquids
 	if nodedef.liquidtype == "flowing" and nodedef.paramtype2 ~= "directionalflowing" then
-		nodedef.paramtype2 = "flowingliquid"
+		nodedef.paramtype2 = force_directional_liquids and "directionalflowing" or "flowingliquid"
+	end
+	if nodedef.liquidtype == "source" and nodedef.paramtype2 ~= "directionalsource" then
+		nodedef.paramtype2 = force_directional_liquids and "directionalsource" or nil
+	end
+	if nodedef.liquidtype and force_liquid_range ~= -1 then
+		nodedef.liquid_range = force_liquid_range
+	end
+	if nodedef.liquidtype and force_liquid_directed_range ~= -1 then
+		nodedef.liquid_directed_range = force_liquid_directed_range
 	end
 end
 
