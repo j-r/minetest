@@ -1157,6 +1157,18 @@ movement_liquid_sink (Liquid sinking) float 10.0
 #    Acceleration of gravity, in nodes per second per second.
 movement_gravity (Gravity) float 9.81
 
+#    Force liquid_range property of all liquids. 0-8 sets range, -1 keeps
+#    game/mode provided range.
+force_liquid_range (Force all liquids to this range) int -1 -1 8
+
+#    Force paramtype2 of liquid sources to directionalsource and flows to
+#    directionalflowing.
+force_directional_liquids (Force all liquids to be directional) bool false
+
+#    Force liquid_directed_range property of all liquids. 0-7 sets range, -1
+#    keeps game/mode provided range.
+force_liquid_directed_range (Force all liquids to this directed range) int -1 -1 7
+
 
 [Mapgen] [world_creation]
 
