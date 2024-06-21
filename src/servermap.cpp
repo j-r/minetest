@@ -1098,7 +1098,10 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 								num_sources++;
 							}
 						}
-					}
+					} else if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
+							cf.param_type_2 == CPT2_DIRECTIONAL_FLOWING)
+						// flowing liquid doesn't spread on source
+						flowing_down = true;
 					break;
 				case LIQUID_FLOWING:
 					// Lower flows cannot flow here
