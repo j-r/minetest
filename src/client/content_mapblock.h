@@ -102,6 +102,7 @@ private:
 		};
 
 		bool top_is_same_liquid;
+		bool bottom_is_same_liquid_source;
 		bool draw_bottom;
 		TileSpec tile;
 		TileSpec tile_top;
