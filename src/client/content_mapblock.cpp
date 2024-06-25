@@ -440,6 +440,8 @@ void MapblockMeshGenerator::drawSolidNode()
 	};
 	TileSpec tiles[6];
 	u16 lights[6];
+	bool is_directional = cur_node.f->param_type_2 == CPT2_DIRECTIONAL_SOURCE;
+	bool draw_directional_liquid_top = false;
 	content_t n1 = cur_node.n.getContent();
 	for (int face = 0; face < 6; face++) {
 		v3s16 p2 = blockpos_nodes + cur_node.p + tile_dirs[face];
@@ -457,8 +459,8 @@ void MapblockMeshGenerator::drawSolidNode()
 		// Submerged solids surrounded by liquid or other solid nodes on all sides are excluded.
 		bool liquid_needs_top_face = face == 0
 			&& cur_node.f->drawtype == NDT_LIQUID
-			&& cur_node.f->waving == 3
-			&& data->m_enable_waving_water;
+			&& ((cur_node.f->waving == 3 && data->m_enable_waving_water)
+					|| is_directional);
 		if (liquid_needs_top_face) {
 			liquid_needs_top_face = false;
 			static const v3s16 h_dirs[4] = {
@@ -490,6 +492,8 @@ void MapblockMeshGenerator::drawSolidNode()
 					!liquid_needs_top_face && (f2.visuals->solidness || f2.visuals->visual_solidness);
 			}
 		}
+		if (is_directional && liquid_needs_top_face)
+			draw_directional_liquid_top = true;
 		faces |= 1 << face;
 		getTile(tile_dirs[face], &tiles[face]);
 		for (auto &layer : tiles[face].layers) {
@@ -504,6 +508,9 @@ void MapblockMeshGenerator::drawSolidNode()
 		return;
 	u8 mask = faces ^ 0b0011'1111; // k-th bit is set if k-th face is to be *omitted*, as expected by cuboid drawing functions.
 	auto box = aabb3f(v3f(-0.5 * BS), v3f(0.5 * BS));
+	if (draw_directional_liquid_top)
+		// lower top face of directional liquid source by 1/16
+		box.MaxEdge.Y -= 0.0625f * BS;
 	box.MinEdge += cur_node.origin;
 	box.MaxEdge += cur_node.origin;
 	if (data->m_smooth_lighting) {
@@ -592,6 +599,7 @@ void MapblockMeshGenerator::prepareLiquidNodeDrawing()
 	cur_liquid.c_source = cur_node.f->liquid_alternative_source_id;
 	cur_liquid.top_is_same_liquid = (ntop.getContent() == cur_liquid.c_flowing)
 			|| (ntop.getContent() == cur_liquid.c_source);
+	cur_liquid.bottom_is_same_liquid_source = (nbottom.getContent() == cur_liquid.c_source);
 	cur_liquid.draw_bottom = (nbottom.getContent() != cur_liquid.c_flowing)
 			&& (nbottom.getContent() != cur_liquid.c_source);
 	if (cur_liquid.draw_bottom) {
@@ -662,8 +670,11 @@ void MapblockMeshGenerator::getLiquidNeighborhood()
 		//       isn't a liquid
 		p2.Y++;
 		n2 = data->m_vmanip.getNodeNoEx(blockpos_nodes + p2);
-		if (n2.getContent() == cur_liquid.c_source || n2.getContent() == cur_liquid.c_flowing)
+		content_t top = n2.getContent();
+		if (top == cur_liquid.c_source || top == cur_liquid.c_flowing)
 			neighbor.top_is_same_liquid = true;
+		else if (cur_node.f->param_type_2 == CPT2_DIRECTIONAL_FLOWING || cur_node.f->param_type_2 == CPT2_DIRECTIONAL_SOURCE)
+			neighbor.level -= 0.0625f;
 	}
 }
 
@@ -692,7 +703,7 @@ f32 MapblockMeshGenerator::getCornerLevel(int i, int k) const
 
 		// Source always has the full height
 		if (content == cur_liquid.c_source)
-			return 0.5f;
+			return neighbor_data.level;
 
 		// Flowing liquid has level information
 		if (content == cur_liquid.c_flowing) {
@@ -769,7 +780,7 @@ void MapblockMeshGenerator::drawLiquidSides()
 			pos.X = (base.X - 0.5f) * BS;
 			pos.Z = (base.Z - 0.5f) * BS;
 			if (vertex.v) {
-				pos.Y = (neighbor.is_same_liquid ? cur_liquid.corner_levels[base.Z][base.X] : -0.5f) * BS;
+				pos.Y = (neighbor.is_same_liquid ? cur_liquid.corner_levels[base.Z][base.X] : (cur_liquid.bottom_is_same_liquid_source ? -0.5625f : -0.5f)) * BS;
 			} else if (cur_liquid.top_is_same_liquid) {
 				pos.Y = 0.5f * BS;
 			} else {
