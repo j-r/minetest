@@ -1063,10 +1063,13 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 						}
 						u8 range = m_nodedef->get(cfnb.liquid_alternative_flowing_id).liquid_range;
 
-						// choose this flow if none found yet or if this
-						// directional flow provides higher liquid level
-						// and it can actually reach here
-						if ((liquid_kind == CONTENT_AIR || (nb_directional && max_level_from_neighbor > max_node_level)) &&
+						// choose neighbor flow if none found yet or if it
+						// is directional and provides higher liquid level;
+						// it also needs the range to actually flow here
+						if ((liquid_kind == CONTENT_AIR ||
+                                                        (nb_directional &&
+									max_level_from_neighbor > max_node_level &&
+									max_level_from_neighbor > node_level)) &&
 								max_level_from_neighbor >= (LIQUID_LEVEL_MAX + 1 - range))
 							liquid_kind = cfnb.liquid_alternative_flowing_id;
 						if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
