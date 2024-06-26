@@ -1174,7 +1174,8 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			new_dirdist = LIQUID_DIRECTION_DOWN;
 		else if (pt2 == CPT2_DIRECTIONAL_FLOWING &&
 				(new_dirdist > (directed_range * 4)
-						|| (max_node_level < LIQUID_LEVEL_MAX + 1 - directed_range)))
+						|| (max_node_level < LIQUID_LEVEL_MAX + 1 - directed_range)
+						|| new_dirdist > ((max_node_level - 8 + range) * 4)))
 			// cannot become directional if out of directed range
 			new_dirdist = 0;
 		else if (pt2 == CPT2_DIRECTIONAL_SOURCE && new_dirdist > 4)
