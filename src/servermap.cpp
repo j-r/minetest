@@ -997,6 +997,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		NodeNeighbor airs[6]; // surrounding air
 		int num_airs = 0;
 		bool flowing_down = false;
+		bool liquid_below = false;
 		bool ignore_node_found = false;
 		bool floating_node_above = false;
 		u8 new_dirdist = 0;
@@ -1104,10 +1105,14 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 									directional_sources[num_directional_sources++] = nb;
 							}
 						}
-					} else if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
+					} else {
+						if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
 							cf.param_type_2 == CPT2_DIRECTIONAL_FLOWING)
-						// flowing liquid doesn't spread on source
-						flowing_down = true;
+							// flowing liquid doesn't spread on source
+							flowing_down = true;
+						else
+							liquid_below = true;
+					}
 					break;
 				case LIQUID_FLOWING:
 					// Lower flows cannot flow here
@@ -1159,9 +1164,11 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 								min_dirdist = nb_dirdist - nb_direction;
 							}
 						}
-					} else if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
-						// mark flowing down
-						flowing_down = true;
+					} else {
+						if (cfnb.liquid_alternative_flowing_id == liquid_kind)
+							flowing_down = true;
+						else
+							liquid_below = true;
 					}
 					// Take note of all flows
 					flows[num_flows++] = nb;
@@ -1240,6 +1247,8 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		 */
 		if (flowing_down)
 			new_dirdist = LIQUID_DIRECTION_DOWN;
+		else if (liquid_below)
+			new_dirdist = 0;
 		else if (pt2 == CPT2_DIRECTIONAL_FLOWING &&
 				(new_dirdist > (directed_range * 4)
 						|| (max_node_level < LIQUID_LEVEL_MAX + 1 - directed_range)
