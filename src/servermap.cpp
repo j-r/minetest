@@ -933,6 +933,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		bool floating_node_above = false;
 		u8 new_dirdist = 0;
 		u8 min_dirdist = 28;
+		bool above_glass = false;
 		for (u16 i = 0; i < 6; i++) {
 			NeighborType nt = NEIGHBOR_SAME_LEVEL;
 			switch (i) {
@@ -1000,7 +1001,8 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 								flowing_down = true;
 							else
 								ignore_node_found = true;
-						}
+						} else if (cfnb.drawtype == NDT_GLASSLIKE || cfnb.drawtype == NDT_GLASSLIKE_FRAMED || cfnb.drawtype == NDT_GLASSLIKE_FRAMED_OPTIONAL)
+							above_glass = true;
 					}
 					break;
 				case LIQUID_SOURCE:
@@ -1172,6 +1174,8 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		 */
 		if (flowing_down)
 			new_dirdist = LIQUID_DIRECTION_DOWN;
+		else if (above_glass)
+			new_dirdist = 0;
 		else if (pt2 == CPT2_DIRECTIONAL_FLOWING &&
 				(new_dirdist > (directed_range * 4)
 						|| (max_node_level < LIQUID_LEVEL_MAX + 1 - directed_range)
