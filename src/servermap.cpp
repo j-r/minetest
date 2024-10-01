@@ -820,6 +820,9 @@ const static v3s16 liquid_6dirs[6] = {
 	v3s16( 0,-1, 0)
 };
 
+// lower liquids cannot flow here
+const static u8 opposite_6dir[6] = { 5, 3, 4, 1, 2, 99 };
+
 enum NeighborType : u8 {
 	NEIGHBOR_UPPER,
 	NEIGHBOR_SAME_LEVEL,
@@ -842,31 +845,6 @@ struct NodeNeighbor {
 	{ }
 };
 
-static s8 get_max_liquid_level(NodeNeighbor nb, s8 current_max_node_level)
-{
-	s8 max_node_level = current_max_node_level;
-	u8 nb_liquid_level = (nb.n.param2 & LIQUID_LEVEL_MASK);
-	switch (nb.t) {
-		case NEIGHBOR_UPPER:
-			if (nb_liquid_level + WATER_DROP_BOOST > current_max_node_level) {
-				max_node_level = LIQUID_LEVEL_MAX;
-				if (nb_liquid_level + WATER_DROP_BOOST < LIQUID_LEVEL_MAX)
-					max_node_level = nb_liquid_level + WATER_DROP_BOOST;
-			} else if (nb_liquid_level > current_max_node_level) {
-				max_node_level = nb_liquid_level;
-			}
-			break;
-		case NEIGHBOR_LOWER:
-			break;
-		case NEIGHBOR_SAME_LEVEL:
-			if ((nb.n.param2 & LIQUID_FLOW_DOWN_MASK) != LIQUID_FLOW_DOWN_MASK &&
-					nb_liquid_level > 0 && nb_liquid_level - 1 > max_node_level)
-				max_node_level = nb_liquid_level - 1;
-			break;
-	}
-	return max_node_level;
-}
-
 void ServerMap::transforming_liquid_add(v3s16 p)
 {
 	m_transforming_liquid.push_back(p);
@@ -875,7 +853,13 @@ void ServerMap::transforming_liquid_add(v3s16 p)
 void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		ServerEnvironment *env)
 {
+	ScopeProfiler sp_avg(g_profiler, "ServerMap: transformLiquids avg", SPT_AVG);
+	ScopeProfiler sp_max(g_profiler, "ServerMap: transformLiquids max", SPT_MAX);
+
 	u32 loopcount = 0;
+	u32 loopcountdir = 0;
+	u32 looptransform = 0;
+	u32 looptransformdir = 0;
 	u32 initial_size = m_transforming_liquid.size();
 
 	/*if(initial_size != 0)
@@ -909,30 +893,45 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		/*
 			Collect information about current node
 		 */
-		s8 liquid_level = -1;
+		s8 node_level = -1;
+		u8 dirdist = 0;
 		// The liquid node which will be placed there if
 		// the liquid flows into this node.
 		content_t liquid_kind = CONTENT_IGNORE;
 		// The node which will be placed there if liquid
 		// can't flow into this node.
 		content_t floodable_node = CONTENT_AIR;
-		const ContentFeatures &cf = m_nodedef->get(n0);
+		content_t node_content = n0.getContent();
+		const ContentFeatures &cf = m_nodedef->get(node_content);
+		bool directional = cf.param_type_2 == CPT2_DIRECTIONAL_FLOWING
+			|| cf.param_type_2 == CPT2_DIRECTIONAL_SOURCE;
 		LiquidType liquid_type = cf.liquid_type;
+		s8 max_node_level = -1;
 		switch (liquid_type) {
 			case LIQUID_SOURCE:
-				liquid_level = LIQUID_LEVEL_SOURCE;
+				// liquid source has no node level, but 'conversion'
+				// by neighbors needs to be prevented
+				max_node_level = LIQUID_LEVEL_SOURCE;
 				liquid_kind = cf.liquid_alternative_flowing_id;
+				if (directional)
+					dirdist = (n0.param2 & LIQUID_DIRECTION_MASK) >> 3;
 				break;
 			case LIQUID_FLOWING:
-				liquid_level = (n0.param2 & LIQUID_LEVEL_MASK);
-				liquid_kind = n0.getContent();
+				node_level = (n0.param2 & LIQUID_LEVEL_MASK);
+				liquid_kind = node_content;
+				if (directional)
+					dirdist = (n0.param2 & LIQUID_DIRECTION_MASK) >> 3;
+				else
+					// CPT2_FLOWINGLIQUID only encoding down direction
+					dirdist = (n0.param2 & LIQUID_FLOW_DOWN_MASK) ?
+						LIQUID_DIRECTION_DOWN : LIQUID_DIRECTION_NONE;
 				break;
 			case LIQUID_NONE:
 				// if this node is 'floodable', it *could* be transformed
 				// into a liquid, otherwise, continue with the next node.
 				if (!cf.floodable)
 					continue;
-				floodable_node = n0.getContent();
+				floodable_node = node_content;
 				liquid_kind = CONTENT_AIR;
 				break;
 			case LiquidType_END:
@@ -942,17 +941,19 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		/*
 			Collect information about the environment
 		 */
-		NodeNeighbor sources[6]; // surrounding sources
 		int num_sources = 0;
+		NodeNeighbor directional_sources[6]; // surrounding directional sources
+		int num_directional_sources = 0;
 		NodeNeighbor flows[6]; // surrounding flowing liquid nodes
 		int num_flows = 0;
 		NodeNeighbor airs[6]; // surrounding air
 		int num_airs = 0;
-		NodeNeighbor neutrals[6]; // nodes that are solid or another kind of liquid
-		int num_neutrals = 0;
 		bool flowing_down = false;
-		bool ignored_sources = false;
+		bool ignore_node_found = false;
 		bool floating_node_above = false;
+		u8 new_dirdist = 0;
+		u8 min_dirdist = 28;
+		bool above_glass = false;
 		for (u16 i = 0; i < 6; i++) {
 			NeighborType nt = NEIGHBOR_SAME_LEVEL;
 			switch (i) {
@@ -968,6 +969,34 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			v3s16 npos = p0 + liquid_6dirs[i];
 			NodeNeighbor nb(getNode(npos), nt, npos);
 			const ContentFeatures &cfnb = m_nodedef->get(nb.n);
+			bool nb_directional = cfnb.param_type_2 == CPT2_DIRECTIONAL_FLOWING
+				|| cfnb.param_type_2 == CPT2_DIRECTIONAL_SOURCE;
+			u8 nb_dirdist;
+			if (nb_directional)
+				nb_dirdist = (nb.n.param2 & LIQUID_DIRECTION_MASK) >> 3;
+			else if (cfnb.param_type_2 == CPT2_FLOWINGLIQUID)
+				nb_dirdist = (nb.n.param2 & LIQUID_FLOW_DOWN_MASK) ?
+					LIQUID_DIRECTION_DOWN : LIQUID_DIRECTION_NONE;
+			else
+				// non directional source or non liquid node
+				nb_dirdist = 0;
+                        // extract direction from dirdist
+                        // uses liquid_6dirs indices to encode direction, range 0-5
+                        // 0   -> 0: no direction (can't flow up)
+                        // 31  -> 5: flowing down
+                        // 1-4 -> 1-4: flowing directly into neighbor flowing down
+                        // 5-28-> 1-4: direction to closest flowdown, distance is floor((<dirdist>-1)/4)+1
+                        // 29-30 currently unused (TODO: encode flowing down into directional flow)
+                        // a bit ugly, but maximizes encodable distance
+			u8 nb_direction;
+			if (nb_dirdist == LIQUID_DIRECTION_DOWN)
+				nb_direction = 5;
+			else if (nb_dirdist)
+				nb_direction = (nb_dirdist - 1) % 4 + 1;
+			else
+				nb_direction = 0;
+                        // note that opposite_6dir[5]>5
+			bool nb_flows_here = !nb_direction || nb_direction == opposite_6dir[i];
 			if (nt == NEIGHBOR_UPPER && cfnb.floats)
 				floating_node_above = true;
 			switch (cfnb.liquid_type) {
@@ -975,7 +1004,7 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 					if (cfnb.floodable) {
 						airs[num_airs++] = nb;
 						// if the current node is a water source the neighbor
-						// should be enqueded for transformation regardless of whether the
+						// should be enqueuded for transformation regardless of whether the
 						// current node changes or not.
 						if (nb.t != NEIGHBOR_UPPER && liquid_type != LIQUID_NONE)
 							m_transforming_liquid.push_back(npos);
@@ -983,51 +1012,113 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 						if (nb.t == NEIGHBOR_LOWER)
 							flowing_down = true;
 					} else {
-						neutrals[num_neutrals++] = nb;
 						if (nb.n.getContent() == CONTENT_IGNORE) {
 							// If node below is ignore prevent water from
-							// spreading outwards and otherwise prevent from
-							// flowing away as ignore node might be the source
+							// spreading outwards, otherwise prevent from
+							// flowing away as the ignore node might be
+							// flowing here
 							if (nb.t == NEIGHBOR_LOWER)
 								flowing_down = true;
 							else
-								ignored_sources = true;
-						}
+								ignore_node_found = true;
+						} else if (cfnb.drawtype == NDT_GLASSLIKE || cfnb.drawtype == NDT_GLASSLIKE_FRAMED || cfnb.drawtype == NDT_GLASSLIKE_FRAMED_OPTIONAL)
+							above_glass = true;
 					}
 					break;
 				case LIQUID_SOURCE:
-					// if this node is not (yet) of a liquid type, choose the first liquid type we encounter
-					if (liquid_kind == CONTENT_AIR)
-						liquid_kind = cfnb.liquid_alternative_flowing_id;
-					if (cfnb.liquid_alternative_flowing_id != liquid_kind) {
-						neutrals[num_neutrals++] = nb;
-					} else {
-						// Do not count bottom source, it will screw things up
-						if(nt != NEIGHBOR_LOWER)
-							sources[num_sources++] = nb;
-					}
+					// Lower sources can never flow here
+					if (nb.t != NEIGHBOR_LOWER) {
+						bool can_flow_here = false;
+						switch (nb.t) {
+							case NEIGHBOR_UPPER:
+								can_flow_here = true;
+								break;
+							case NEIGHBOR_SAME_LEVEL:
+								can_flow_here = nb_flows_here;
+								break;
+							case NEIGHBOR_LOWER:
+								// cannot happen
+								break;
+						}
+
+						if (can_flow_here) {
+							// choose this source if no other source found yet
+							if (liquid_kind == CONTENT_AIR || max_node_level <= LIQUID_LEVEL_MAX) {
+								liquid_kind = cfnb.liquid_alternative_flowing_id;
+								// prevent conversion by other source by using MAX+1
+								// note that this value will never be used to determine liquid level
+								max_node_level = LIQUID_LEVEL_SOURCE;
+							}
+							if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
+								// count number of sources that could flow here
+								// note that liquid type will never change after a source has been found
+								num_sources++;
+								// if source is directional it needs to update itself if this node changes
+								if (nb_directional)
+									directional_sources[num_directional_sources++] = nb;
+							}
+						}
+					} else if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
+							cf.param_type_2 == CPT2_DIRECTIONAL_FLOWING)
+						// flowing liquid doesn't spread on source
+						flowing_down = true;
 					break;
 				case LIQUID_FLOWING:
-					if (nb.t != NEIGHBOR_SAME_LEVEL ||
-						(nb.n.param2 & LIQUID_FLOW_DOWN_MASK) != LIQUID_FLOW_DOWN_MASK) {
-						// if this node is not (yet) of a liquid type, choose the first liquid type we encounter
-						// but exclude falling liquids on the same level, they cannot flow here anyway
-
-						// used to determine if the neighbor can even flow into this node
-						s8 max_level_from_neighbor = get_max_liquid_level(nb, -1);
+					// Lower flows cannot flow here
+					if (nb.t != NEIGHBOR_LOWER) {
+						s8 max_level_from_neighbor = -1;
+						u8 nb_node_level = (nb.n.param2 & LIQUID_LEVEL_MASK);
+						switch (nb.t) {
+							case NEIGHBOR_UPPER:
+								max_level_from_neighbor = LIQUID_LEVEL_MAX;
+								if (nb_node_level + WATER_DROP_BOOST < LIQUID_LEVEL_MAX)
+									max_level_from_neighbor = nb_node_level + WATER_DROP_BOOST;
+								break;
+							case NEIGHBOR_SAME_LEVEL:
+								// exclude falling liquids on the same level, they cannot flow here anyway
+								if (nb_flows_here && nb_node_level > 0)
+									max_level_from_neighbor = nb_node_level - 1;
+								break;
+							case NEIGHBOR_LOWER:
+								// never happens
+								break;
+						}
 						u8 range = m_nodedef->get(cfnb.liquid_alternative_flowing_id).liquid_range;
 
-						if (liquid_kind == CONTENT_AIR &&
+						// choose neighbor flow if none found yet or if it
+						// is directional and provides higher liquid level;
+						// it also needs the range to actually flow here
+						if ((liquid_kind == CONTENT_AIR ||
+                                                        (nb_directional &&
+									max_level_from_neighbor > max_node_level &&
+									max_level_from_neighbor > node_level)) &&
 								max_level_from_neighbor >= (LIQUID_LEVEL_MAX + 1 - range))
 							liquid_kind = cfnb.liquid_alternative_flowing_id;
+						if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
+								max_level_from_neighbor > max_node_level)
+							max_node_level = max_level_from_neighbor;
+						// if directional, pick direction to same level neighbor
+						// of same kind closest to flowdown
+						// note that this may be overridden by flowing_down later
+						if (cfnb.liquid_alternative_flowing_id == liquid_kind &&
+								nb_directional &&
+								!nb_flows_here && nb_dirdist) {
+							if (nb_dirdist == LIQUID_DIRECTION_DOWN) {
+								if (!new_dirdist || new_dirdist > 4) {
+									new_dirdist = i;
+									min_dirdist = 0;
+								}
+							} else if (nb_dirdist <= min_dirdist) {
+								new_dirdist = nb_dirdist - nb_direction + i + 4;
+								min_dirdist = nb_dirdist - nb_direction;
+							}
+						}
+					} else if (cfnb.liquid_alternative_flowing_id == liquid_kind) {
+						// mark flowing down
+						flowing_down = true;
 					}
-					if (cfnb.liquid_alternative_flowing_id != liquid_kind) {
-						neutrals[num_neutrals++] = nb;
-					} else {
-						flows[num_flows++] = nb;
-						if (nb.t == NEIGHBOR_LOWER)
-							flowing_down = true;
-					}
+					// Take note of all flows
+					flows[num_flows++] = nb;
 					break;
 				case LiquidType_END:
 					break;
@@ -1039,7 +1130,6 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		 */
 		content_t new_node_content;
 		s8 new_node_level = -1;
-		s8 max_node_level = -1;
 
 		u8 range = m_nodedef->get(liquid_kind).liquid_range;
 		if (range > LIQUID_LEVEL_MAX + 1)
@@ -1050,35 +1140,32 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 			// or the flowing alternative of the first of the surrounding sources (if it's air), so
 			// it's perfectly safe to use liquid_kind here to determine the new node content.
 			new_node_content = m_nodedef->get(liquid_kind).liquid_alternative_source_id;
-		} else if (num_sources >= 1 && sources[0].t != NEIGHBOR_LOWER) {
+		} else if (num_sources >= 1) {
 			// liquid_kind is set properly, see above
 			max_node_level = new_node_level = LIQUID_LEVEL_MAX;
 			if (new_node_level >= (LIQUID_LEVEL_MAX + 1 - range))
 				new_node_content = liquid_kind;
 			else
 				new_node_content = floodable_node;
-		} else if (ignored_sources && liquid_level >= 0) {
-			// Maybe there are neighboring sources that aren't loaded yet
-			// so prevent flowing away.
-			new_node_level = liquid_level;
+		} else if (ignore_node_found && node_level >= 0) {
+			// Maybe there are neighboring flows that aren't loaded yet,
+			// so prevent flowing away
+			new_node_level = node_level;
+			new_dirdist = dirdist;
 			new_node_content = liquid_kind;
 		} else {
-			// no surrounding sources, so get the maximum level that can flow into this node
-			for (u16 i = 0; i < num_flows; i++) {
-				max_node_level = get_max_liquid_level(flows[i], max_node_level);
-			}
-
+			// no neighboring source found, so max_node_level <= LIQUID_LEVEL_MAX
 			u8 viscosity = m_nodedef->get(liquid_kind).liquid_viscosity;
-			if (viscosity > 1 && max_node_level != liquid_level) {
+			if (viscosity > 1 && max_node_level != node_level) {
 				// amount to gain, limited by viscosity
 				// must be at least 1 in absolute value
-				s8 level_inc = max_node_level - liquid_level;
+				s8 level_inc = max_node_level - node_level;
 				if (level_inc < -viscosity || level_inc > viscosity)
-					new_node_level = liquid_level + level_inc/viscosity;
+					new_node_level = node_level + level_inc/viscosity;
 				else if (level_inc < 0)
-					new_node_level = liquid_level - 1;
+					new_node_level = node_level - 1;
 				else if (level_inc > 0)
-					new_node_level = liquid_level + 1;
+					new_node_level = node_level + 1;
 				if (new_node_level != max_node_level)
 					must_reflow.push_back(p0);
 			} else {
@@ -1092,15 +1179,55 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 
 		}
 
+		const ContentFeatures &cfnew = m_nodedef->get(new_node_content);
+		ContentParamType2 pt2 = cfnew.param_type_2;
+		if (pt2 == CPT2_NONE && liquid_type == LIQUID_FLOWING && new_node_level >= 0)
+			pt2 = CPT2_FLOWINGLIQUID;
+		bool new_directional = (pt2 == CPT2_DIRECTIONAL_FLOWING || pt2 == CPT2_DIRECTIONAL_SOURCE);
+		u8 directed_range = new_directional ? cfnew.liquid_directed_range : 0;
+		if (directed_range > 7)
+			// can only encode distances 0-6 in flows
+			directed_range = 7;
+
+		/*
+			finalize direction
+		 */
+		if (flowing_down)
+			new_dirdist = LIQUID_DIRECTION_DOWN;
+		else if (above_glass)
+			new_dirdist = 0;
+		else if (pt2 == CPT2_DIRECTIONAL_FLOWING &&
+				(new_dirdist > (directed_range * 4)
+						|| (max_node_level < LIQUID_LEVEL_MAX + 1 - directed_range)
+						|| new_dirdist > ((max_node_level - 8 + range) * 4)))
+			// cannot become directional if out of directed range
+			new_dirdist = 0;
+		else if (pt2 == CPT2_DIRECTIONAL_SOURCE && new_dirdist > 4)
+			// source doesn't encode distance
+			new_dirdist = (new_dirdist - 1) % 4 + 1;
+
+		// count directional node
+		if (new_directional && new_dirdist)
+			loopcountdir += 1;
+
 		/*
 			check if anything has changed. if not, just continue with the next node.
 		 */
-		if (new_node_content == n0.getContent() &&
-				(m_nodedef->get(n0.getContent()).liquid_type != LIQUID_FLOWING ||
-				((n0.param2 & LIQUID_LEVEL_MASK) == (u8)new_node_level &&
-				((n0.param2 & LIQUID_FLOW_DOWN_MASK) == LIQUID_FLOW_DOWN_MASK)
-				== flowing_down)))
-			continue;
+		if (new_node_content == node_content) {
+			bool same = true;
+			if (pt2 == CPT2_DIRECTIONAL_FLOWING || pt2 == CPT2_FLOWINGLIQUID)
+				same &= (new_node_level == node_level &&
+						flowing_down == (dirdist == LIQUID_DIRECTION_DOWN));
+			if (new_directional)
+				same &= (new_dirdist == dirdist);
+			if (same)
+				continue;
+		}
+
+                // count changed node
+		looptransform += 1;
+		if (new_directional && new_dirdist)
+			looptransformdir += 1;
 
 		/*
 			check if there is a floating node above that needs to be updated.
@@ -1108,17 +1235,30 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		if (floating_node_above && new_node_content == CONTENT_AIR)
 			check_for_falling.push_back(p0);
 
+		// remember old state of current node
+		MapNode n00 = n0;
+
 		/*
 			update the current node
 		 */
-		MapNode n00 = n0;
-		//bool flow_down_enabled = (flowing_down && ((n0.param2 & LIQUID_FLOW_DOWN_MASK) != LIQUID_FLOW_DOWN_MASK));
-		if (m_nodedef->get(new_node_content).liquid_type == LIQUID_FLOWING) {
-			// set level to last 3 bits, flowing down bit to 4th bit
-			n0.param2 = (flowing_down ? LIQUID_FLOW_DOWN_MASK : 0x00) | (new_node_level & LIQUID_LEVEL_MASK);
+		if (new_directional) {
+			// reset complete param2 for directional flows
+			n0.param2 = ((new_dirdist << 3) & LIQUID_DIRECTION_MASK);
+		} else if (pt2 == CPT2_FLOWINGLIQUID) {
+			// reset complete param2 for non directional flowing liquids
+			n0.param2 = flowing_down ? LIQUID_FLOW_DOWN_MASK : 0x00;
+		} else if (directional) {
+			// reset complete param2 for evaporated directional liquids
+			n0.param2 = 0;
 		} else {
-			// set the liquid level and flow bits to 0
+			// preserve upper 4 bits for backwards compatibility
+			// TODO: decide whether that is really necessary
 			n0.param2 &= ~(LIQUID_LEVEL_MASK | LIQUID_FLOW_DOWN_MASK);
+		}
+
+		if (pt2 == CPT2_DIRECTIONAL_FLOWING || pt2 == CPT2_FLOWINGLIQUID) {
+			// finally set level bits for flowing liquids
+			n0.param2 |= (new_node_level & LIQUID_LEVEL_MASK);
 		}
 
 		// change the node.
@@ -1165,29 +1305,44 @@ void ServerMap::transformLiquids(std::map<v3s16, MapBlock*> &modified_blocks,
 		}
 
 		/*
-			enqueue neighbors for update if necessary
+			enqueue nodes for update if necessary
 		 */
-		switch (m_nodedef->get(n0.getContent()).liquid_type) {
+		bool other_kind = false;
+		switch (cfnew.liquid_type) {
 			case LIQUID_SOURCE:
 			case LIQUID_FLOWING:
-				// make sure source flows into all neighboring nodes
+				// make sure all neighboring flows update their state (incl. flowing down)
 				for (u16 i = 0; i < num_flows; i++)
-					if (flows[i].t != NEIGHBOR_UPPER)
-						m_transforming_liquid.push_back(flows[i].p);
+					m_transforming_liquid.push_back(flows[i].p);
 				for (u16 i = 0; i < num_airs; i++)
 					if (airs[i].t != NEIGHBOR_UPPER)
 						m_transforming_liquid.push_back(airs[i].p);
+				// make sure all neighboring directional sources update their state
+				for (u16 i = 0; i < num_directional_sources; i++)
+					m_transforming_liquid.push_back(directional_sources[i].p);
 				break;
 			case LIQUID_NONE:
 				// this flow has turned to air; neighboring flows might need to do the same
 				for (u16 i = 0; i < num_flows; i++)
-					m_transforming_liquid.push_back(flows[i].p);
+					if (m_nodedef->get(flows[i].n).liquid_alternative_flowing_id == liquid_kind)
+						m_transforming_liquid.push_back(flows[i].p);
+					else
+						other_kind = true;
+				// don't do this update for classic flows for backwards compatibility
+				// TODO: decide whether this should be fixed for classic liquids, too
+				if (directional && other_kind)
+					// other liquid kind may now flow into this node
+					m_transforming_liquid.push_back(p0);
 				break;
 			case LiquidType_END:
 				break;
 		}
 	}
-	//infostream<<"Map::transformLiquids(): loopcount="<<loopcount<<std::endl;
+
+	g_profiler->add("ServerMap: transformLiquids: processed", loopcount);
+	g_profiler->add("ServerMap: transformLiquids: processed (dir)", loopcountdir);
+	g_profiler->add("ServerMap: transformLiquids: changed", looptransform);
+	g_profiler->add("ServerMap: transformLiquids: changed (dir)", looptransformdir);
 
 	for (const auto &iter : must_reflow)
 		m_transforming_liquid.push_back(iter);
