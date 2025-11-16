@@ -222,26 +222,28 @@ function pkgmgr.is_valid_modname(modpath)
 end
 
 
--- expensive: recursively check all contained mods and return whether at least
--- one of the contained mods is enabled resp. disabled
-local function check_modpack_status(rawlist, modpack)
-	local enabled_found, disabled_found
-	for j = 1, #rawlist do
-		if rawlist[j].modpack == modpack.name and rawlist[j].parent_dir == modpack.path then
-			if rawlist[j].is_modpack then
-				enabled_found, disabled_found = check_modpack_status(rawlist, rawlist[j])
-			elseif rawlist[j].enabled then
-				enabled_found = true
-			else
-				disabled_found = true
-			end
-
-			if enabled_found and disabled_found then
-				return true, true
-			end
+-- update all modpacks in the given raw list with whether at least one of the
+-- contained mods is enabled resp. disabled
+local function update_modpack_status(rawlist)
+	local parent = {}
+	local function propagate(depth, enabled)
+		local field = enabled and "has_enabled" or "has_disabled"
+		while depth > 0 and not parent[depth][field] do
+			parent[depth][field] = true
+			depth = depth - 1
 		end
 	end
-	return enabled_found, disabled_found
+	for j = 1, #rawlist do
+		local mod = rawlist[j]
+		if mod.is_modpack then
+			parent[mod.modpack_depth + 1] = mod
+			mod.has_enabled = false
+			mod.has_disabled = false
+		end
+		if parent[mod.modpack_depth] and not mod.is_modpack then
+			propagate(mod.modpack_depth, mod.enabled)
+		end
+	end
 end
 
 --------------------------------------------------------------------------------
@@ -255,6 +257,10 @@ function pkgmgr.render_packagelist(render_list, use_technical_names, with_icon)
 		end
 		render_list = pkgmgr.global_mods
 	end
+
+	-- mark modpack enablement status according to status of (recursively)
+	-- contained mods
+	update_modpack_status(render_list:get_raw_list())
 
 	local list = render_list:get_list()
 	local retval = {}
@@ -270,27 +276,18 @@ function pkgmgr.render_packagelist(render_list, use_technical_names, with_icon)
 
 		if v.is_modpack then
 			local rawlist = render_list:get_raw_list()
-			color = mt_color_dark_green
+			color = mt_color_grey
+			if v.has_enabled then
+				icon = 1
+				if not v.has_disabled then
+					color = mt_color_dark_green
+				end
+			end
 
-			for j = 1, #rawlist do
-				if rawlist[j].modpack == list[i].name and rawlist[j].parent_dir == list[i].path then
-					if with_icon then
+			if with_icon then
+				for j = 1, #rawlist do
+					if rawlist[j].modpack == list[i].name and rawlist[j].parent_dir == list[i].path then
 						update_icon_info(with_icon[rawlist[j].virtual_path or rawlist[j].path])
-					end
-
-					if rawlist[j].is_modpack then
-						local enabled_found, disabled_found = check_modpack_status(rawlist, rawlist[j])
-						if enabled_found then
-							icon = 1
-						end
-						if disabled_found or not enabled_found then
-							color = mt_color_grey
-						end
-					elseif rawlist[j].enabled then
-						icon = 1
-					else
-						-- Modpack not entirely enabled so showing as grey
-						color = mt_color_grey
 					end
 				end
 			end
@@ -353,12 +350,6 @@ function pkgmgr.get_dependencies(path)
 
 	local info = core.get_content_info(path)
 	return info.depends or {}, info.optional_depends or {}
-end
-
------------ tests whether all of the mods in the modpack are enabled -----------
-function pkgmgr.is_modpack_entirely_enabled(rawlist, modpack)
-	local _, disabled_found = check_modpack_status(rawlist, modpack)
-	return not disabled_found
 end
 
 local function disable_all_by_name(list, name, except)

@@ -192,6 +192,11 @@ local function get_formspec(data)
 		end
 	end
 
+	local use_technical_names = core.settings:get_bool("show_technical_names")
+
+	-- this implicitly updates has_enabled/has_disabled fields on all modpacks
+	local mod_list = pkgmgr.render_packagelist(data.list, use_technical_names, with_error)
+
 	retval = retval ..
 		"button[3.25,7;2.5,0.5;btn_config_world_save;" ..
 		fgettext("Save") .. "]" ..
@@ -202,7 +207,7 @@ local function get_formspec(data)
 
 	if mod.name ~= "" and not mod.always_on then
 		if mod.is_modpack then
-			if pkgmgr.is_modpack_entirely_enabled(data.list:get_raw_list(), mod) then
+			if mod.has_enabled and not mod.has_disabled then
 				retval = retval ..
 					"button[5.5,0.125;3,0.5;btn_mp_disable;" ..
 					fgettext("Disable modpack") .. "]"
@@ -227,15 +232,12 @@ local function get_formspec(data)
 			fgettext("Enable all") .. "]"
 	end
 
-	local use_technical_names = core.settings:get_bool("show_technical_names")
-
 	return retval ..
 		"tablecolumns[color;tree;image,align=inline,width=1.5,0=" .. core.formspec_escape(defaulttexturedir .. "blank.png") ..
 			",1=" .. core.formspec_escape(defaulttexturedir .. "checkbox_16.png") ..
 			",2=" .. core.formspec_escape(defaulttexturedir .. "error_icon_orange.png") ..
 			",3=" .. core.formspec_escape(defaulttexturedir .. "error_icon_red.png") .. ";text]" ..
-		"table[5.5,0.75;5.75,6;world_config_modlist;" ..
-		pkgmgr.render_packagelist(data.list, use_technical_names, with_error) .. ";" .. data.selected_mod .."]"
+		"table[5.5,0.75;5.75,6;world_config_modlist;" .. mod_list .. ";" .. data.selected_mod .."]"
 end
 
 local function handle_buttons(this, fields)
