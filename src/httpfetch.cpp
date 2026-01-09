@@ -230,9 +230,7 @@ HTTPFetchOngoing::HTTPFetchOngoing(const HTTPFetchRequest &request_,
 	}
 
 	std::string proxy = g_settings->get("curl_proxy");
-	if (!proxy.empty()) {
-		curl_easy_setopt(curl, CURLOPT_PROXY, proxy.c_str());
-	}
+	curl_easy_setopt(curl, CURLOPT_PROXY, proxy.empty() ? nullptr : proxy.c_str());
 
 	if (!g_settings->getBool("enable_ipv6")) {
 		curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
