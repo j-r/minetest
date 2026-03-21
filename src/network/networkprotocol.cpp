@@ -72,6 +72,7 @@
 		Support for TOCLIENT_SPAWN_PARTICLE_BATCH
 		[scheduled bump for 5.14.0]
 	PROTOCOL VERSION 51
+		New directional liquid param2 types get downgraded for older clients
 		Only send first frame of animated item/wield images to older client
 		[scheduled bump for 5.15.0]
 	PROTOCOL VERSION 52
