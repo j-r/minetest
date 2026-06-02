@@ -93,6 +93,10 @@ enum Rotation {
 #define LIQUID_LEVEL_MASK 0x07
 #define LIQUID_FLOW_DOWN_MASK 0x08
 
+#define LIQUID_DIRECTION_MASK 0xF8
+#define LIQUID_DIRECTION_NONE 0
+#define LIQUID_DIRECTION_DOWN 31
+
 /* maximum amount of liquid in a block */
 #define LIQUID_LEVEL_MAX LIQUID_LEVEL_MASK
 #define LIQUID_LEVEL_SOURCE (LIQUID_LEVEL_MAX+1)
