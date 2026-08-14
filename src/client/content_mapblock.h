@@ -99,9 +99,11 @@ private:
 			content_t content;
 			bool is_same_liquid;
 			bool top_is_same_liquid;
+			bool is_flowing_down;
 		};
 
 		bool top_is_same_liquid;
+		bool bottom_is_same_liquid_source;
 		bool draw_bottom;
 		TileSpec tile;
 		TileSpec tile_top;
