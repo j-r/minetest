@@ -780,14 +780,24 @@ listed source images to their specified `<xN>,<yN>` coordinates of the target te
 The background is black and transparent (`#00000000`).
 Since 5.19.0, the note on `TEXMOD_UPSCALE` applies if a base image is present.
 
-Example of combining two 16x16 px textures into a 16x32 px texture. The resulting image
-will look different when other texture sizes are used (e.g. provided by texture packs).
+Example of combining the top left 16x16 px areas of two textures into a 16x32 px
+texture. The resulting image will depend on the size of the textures provided
+(e.g. by texture packs). With 16x16 textures both textures are seamlessly stitched
+together, with 8x8 textures the default background will be visible outside the 8x8
+areas covered by the input textures, and with 32x32 textures only the top left
+16x16 area of both textures will be included in the result.
 
     [combine:16x32:0,0=default_cobble.png:0,16=default_wood.png
 
-Example with `<sN>` parameters. With 16x16 px textures, the result is the same as in
-the example above. With 32x32 textures, the resulting texture is of size 32x64,
-where its right side consists again of `default_wood.png`.
+Compare the following example with `<sN>` parameters. Now all input texture sizes
+will result in both input textures being seamlessly stitched together
+horizontally. With 16x16 px textures, the result is exactly the same as in the
+example above. With 8x8 textures the result is size 16x32, but the input textures are
+both scaled to fill their designated 16x16 area, and with 32x32 textures, the
+resulting texture is of size 32x64, containing both input textures without any
+scaling. If the input textures are not square, some part may still be clipped or the
+default background shown in the result, because all scaling maintains the texture's
+aspect ratio.
 
     [combine:16x32:0,0,16=default_cobble.png:0,16,16=default_wood.png
 
